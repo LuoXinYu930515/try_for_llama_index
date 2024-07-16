@@ -1,0 +1,8 @@
+Hello
+Generate a summary for the given file named Wireshark_HTTP_v8.0.pdf
+What can I learn after finishing the experiment mentioned in Wireshark_HTTP_v8.0.pdf?
+Is there any suggestion from you before doing the experiment mentioned in Wireshark_HTTP_v8.0.pdf?
+Is there any suggestion from you while doing the experiment mentioned in Wireshark_HTTP_v8.0.pdf?
+What should I pay attention for while doing the experiment mentioned in Wireshark_HTTP_v8.0.pdf?
+What is HTTP?
+What's the difference between HTTP and HTTPS?
