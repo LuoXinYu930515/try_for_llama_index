@@ -6,6 +6,7 @@ import cProfile
 import pstats
 from pstats import SortKey
 
+# from llama_index.llms.huggingf
 from llama_index.llms.ollama import Ollama
 from llama_index.llms.openai import OpenAI
 from llama_index.core import Settings
@@ -23,6 +24,7 @@ from llama_index.core.evaluation import (FaithfulnessEvaluator,
                                          QueryResponseEvaluator,
                                          DatasetGenerator,
                                          RelevancyEvaluator)
+
 import asyncio
 import nest_asyncio
 nest_asyncio.apply()
@@ -38,7 +40,7 @@ def setting_for_env():
 # load for the uploaded files
 def data_loading():
     reader = SimpleDirectoryReader(input_dir="data/", recursive=True)
-    documents = reader.load_data(num_workers=10)
+    documents = reader.load_data(num_workers=16)
     return documents
 
 
@@ -49,19 +51,19 @@ async def parallel_ingestion(pipeline, documents):
 
 
 # RAG
-def building_reg_pipeline():
+def building_rag_pipeline():
     # LLM, Llama2
     Settings.llm = Ollama(model="llama2",
-                          request_timeout=300.0,
+                          request_timeout=1000.0,
                           device_map="cuda")
 
     # load documents, parallel programming
     # use cProfile to evaluate performance
-    profiler = cProfile.Profile()
-    profiler.enable()
+    # profiler = cProfile.Profile()
+    # profiler.enable()
     documents = data_loading()
-    profiler.disable()
-    profiler.dump_stats("newstas")
+    # profiler.disable()
+    # profiler.dump_stats("newstas")
 
     # node parser
     # node_parser = SimpleNodeParser.from_defaults(chunk_size=512)
@@ -90,26 +92,34 @@ def building_reg_pipeline():
     # parallelizing ingestion pipeline
     pipeline = IngestionPipeline(
         transformations=[
-            SentenceSplitter(chunk_size=512, chunk_overlap=20),
+            SentenceSplitter(chunk_size=128, chunk_overlap=20),
             TitleExtractor(),
             OllamaEmbedding(model_name="llama2")
         ]
     )
-    pipeline.disable_cache = True
+    pipeline.disable_cache = True  # testing performance, so disable cache
 
     # nodes = parallel_ingestion(pipeline, documents)
-    nodes = pipeline.run(documents=documents, num_works=4)
+    # Generate and insert vectors in batches of 2048 nodes
+    profiler = cProfile.Profile()
+    profiler.enable()
+    nodes = pipeline.run(documents=documents,
+                         num_works=16,
+                         show_progress=True)
+    profiler.disable()
+    profiler.dump_stats("newstas")
     Settings.embed_model = OllamaEmbedding(model_name="llama2")
-    index = VectorStoreIndex(nodes=nodes,
-                             vector_store=vector_store,
-                             storage_context=storage_context)
+    index = VectorStoreIndex.build_index_from_nodes(nodes=nodes,
+                                                    vector_store=vector_store,
+                                                    storage_context=storage_context,
+                                                    insert_batch_size=8192)
 
     end_time = time.time()
     print("finish transformation, time cost: ", end_time - start_time, "s\n")
 
     # create query engin
     # Reorder the searched Node
-    # solve the missing content problem
+    # solve the "not extract" problem
     start_time = time.time()
     reorder = LongContextReorder()
     query_engine = index.as_query_engine(llm=Settings.llm,
@@ -148,13 +158,13 @@ def auto_generator_prompt(documents):
 
 def main():
     # GPU
-    setting_for_env()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("current device: ", device)
-    print("device name: ", torch.cuda.get_device_name(device), "\n")
+    # setting_for_env()
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # print("current device: ", device)
+    # print("device name: ", torch.cuda.get_device_name(device), "\n")
 
     # load for query_engine
-    query_engine = building_reg_pipeline()
+    query_engine = building_rag_pipeline()
     # performance evaluation of data loading
     p = pstats.Stats("newstas")
     p.strip_dirs().sort_stats(SortKey.CUMULATIVE).print_stats(15)
